@@ -1,5 +1,8 @@
 package akka.persistence.pg.event
 
+import akka.persistence.journal.{Tagged => AkkaTagged}
+import akka.persistence.pg.EventTag
+
 trait EventTagger {
 
   /**
@@ -19,8 +22,9 @@ object NotTagged extends EventTagger {
 object DefaultTagger extends EventTagger {
 
   override def tags(event: Any) = event match {
-    case t: Tagged => t.tags
-    case _         => Map.empty
+    case t: Tagged     => t.tags
+    case t: AkkaTagged => EventTag(t)
+    case _             => Map.empty
   }
 
 }

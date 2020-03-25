@@ -34,7 +34,7 @@ class CustomSerializationTest
     with PgConfig {
 
   override def config: Config = ConfigFactory.load("example-actor-serialization-test.conf")
-  override def pluginConfig   = PluginConfig(config)
+  override def pluginConfig   = PluginConfig(system, config)
 
   override implicit val patienceConfig = PatienceConfig(timeout = scaled(Span(2, Seconds)))
 

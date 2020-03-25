@@ -1,7 +1,6 @@
 package akka.persistence.pg
 
 import java.util.Properties
-
 import akka.actor.{ActorContext, ActorSystem}
 import akka.persistence.pg.event._
 import akka.persistence.pg.journal.WriteStrategy
@@ -9,23 +8,27 @@ import com.typesafe.config.{Config, ConfigFactory}
 import org.postgresql.ds.PGSimpleDataSource
 import slick.jdbc.JdbcBackend
 import slick.util.AsyncExecutor
-
 import scala.collection.JavaConverters._
+import scala.util.Try
 
 object PluginConfig {
-  def apply(system: ActorSystem) = new PluginConfig(system.settings.config)
+  def apply(system: ActorSystem): PluginConfig = new PluginConfig(system)
 
-  def apply(config: Config) = new PluginConfig(config)
+  def apply(system: ActorSystem, config: Config): PluginConfig = new PluginConfig(system, config)
 
   def asOption(s: String): Option[String] = if (s.isEmpty) None else Some(s)
 
-  def newInstance[T](clazz: String): T =
-    Thread.currentThread().getContextClassLoader.loadClass(clazz).asInstanceOf[Class[_ <: T]].newInstance()
-
+  def newInstance[T](clazz: String)(args: Any*): T = {
+    val cl       = Thread.currentThread().getContextClassLoader.loadClass(clazz).asInstanceOf[Class[_ <: T]]
+    val argTypes = args.map(_.getClass)
+    Try(cl.getConstructor(argTypes: _*).newInstance(args)).getOrElse(cl.newInstance())
+  }
 }
 
-class PluginConfig(systemConfig: Config) {
+class PluginConfig(system: ActorSystem, systemConfig: Config) {
   private val config = systemConfig.getConfig("pg-persistence")
+
+  def this(system: ActorSystem) = this(system, system.settings.config)
 
   val schema: Option[String] = PluginConfig.asOption(config.getString("schemaName"))
   val schemaName: String     = schema.fold("")(n => '"' + n + '"')
@@ -40,7 +43,7 @@ class PluginConfig(systemConfig: Config) {
 
   val snapshotEncoder: JsonEncoder = PluginConfig
     .asOption(config.getString("snapshotEncoder"))
-    .fold(NoneJsonEncoder: JsonEncoder)(PluginConfig.newInstance[JsonEncoder])
+    .fold(NoneJsonEncoder: JsonEncoder)(PluginConfig.newInstance[JsonEncoder](_)(system))
 
   def shutdownDataSource(): Unit = database.close()
 
@@ -98,7 +101,7 @@ class PluginConfig(systemConfig: Config) {
   }
 
   lazy val eventStoreConfig: EventStoreConfig =
-    EventStoreConfig(config.getConfig("eventstore"), schema, journalTableName)
+    EventStoreConfig(system, config.getConfig("eventstore"), schema, journalTableName)
 
   lazy val eventStore: Option[EventStore] = {
     PluginConfig.asOption(eventStoreConfig.cfg.getString("class")) map { storeName =>
@@ -124,7 +127,7 @@ class PluginConfig(systemConfig: Config) {
 
 }
 
-case class EventStoreConfig(cfg: Config, schema: Option[String], journalTableName: String) {
+case class EventStoreConfig(system: ActorSystem, cfg: Config, schema: Option[String], journalTableName: String) {
   val idColumnName: String = cfg.getString("idColumnName")
   val useView: Boolean     = cfg.getBoolean("useView")
 
@@ -134,12 +137,12 @@ case class EventStoreConfig(cfg: Config, schema: Option[String], journalTableNam
 
   val eventEncoder: JsonEncoder = PluginConfig
     .asOption(cfg.getString("encoder"))
-    .fold(NoneJsonEncoder: JsonEncoder)(PluginConfig.newInstance[JsonEncoder])
+    .fold(NoneJsonEncoder: JsonEncoder)(PluginConfig.newInstance[JsonEncoder](_)(system))
 
   val eventTagger: EventTagger = PluginConfig.asOption(cfg.getString("tagger")) match {
     case None            => NotTagged
     case Some("default") => DefaultTagger
-    case Some(clazz)     => PluginConfig.newInstance[EventTagger](clazz)
+    case Some(clazz)     => PluginConfig.newInstance[EventTagger](clazz)()
   }
 
 }

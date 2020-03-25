@@ -20,7 +20,7 @@ class ReadModelUpdateActorTest
     with PgConfig {
 
   override val config: Config = ConfigFactory.load("example-actor-test.conf")
-  override val pluginConfig   = PluginConfig(config)
+  override val pluginConfig   = PluginConfig(system, config)
 
   override implicit val patienceConfig = PatienceConfig(timeout = scaled(Span(2, Seconds)))
 
