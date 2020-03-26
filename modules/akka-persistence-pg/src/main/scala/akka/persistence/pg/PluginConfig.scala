@@ -18,10 +18,11 @@ object PluginConfig {
 
   def asOption(s: String): Option[String] = if (s.isEmpty) None else Some(s)
 
-  def newInstance[T](clazz: String)(args: Any*): T = {
-    val cl       = Thread.currentThread().getContextClassLoader.loadClass(clazz).asInstanceOf[Class[_ <: T]]
-    val argTypes = args.map(_.getClass)
-    Try(cl.getConstructor(argTypes: _*).newInstance(args)).getOrElse(cl.newInstance())
+  def newInstance[T](clazz: String)(system: ActorSystem): T = {
+    val cl = Thread.currentThread().getContextClassLoader.loadClass(clazz).asInstanceOf[Class[_ <: T]]
+    Try(cl.getConstructor(classOf[akka.actor.ExtendedActorSystem]).newInstance(system))
+      .orElse(Try(cl.getConstructor(classOf[akka.actor.ActorSystem]).newInstance(system)))
+      .getOrElse(cl.newInstance())
   }
 }
 
@@ -142,7 +143,7 @@ case class EventStoreConfig(system: ActorSystem, cfg: Config, schema: Option[Str
   val eventTagger: EventTagger = PluginConfig.asOption(cfg.getString("tagger")) match {
     case None            => NotTagged
     case Some("default") => DefaultTagger
-    case Some(clazz)     => PluginConfig.newInstance[EventTagger](clazz)()
+    case Some(clazz)     => PluginConfig.newInstance[EventTagger](clazz)(system)
   }
 
 }
