@@ -4,6 +4,7 @@ import java.time.OffsetDateTime
 import java.util.UUID
 
 import akka.persistence.PersistentRepr
+import akka.persistence.journal.{Tagged => AkkaTagged}
 import akka.persistence.pg.event._
 import akka.persistence.pg.{EventTag, JsonString, PgConfig, PgExtension}
 import akka.serialization.{Serialization, Serializers}
@@ -64,6 +65,7 @@ trait JournalStore extends JournalTable {
       messages map { message =>
         val event = message.payload match {
           case w: EventWrapper[_] => w.event
+          case w: AkkaTagged      => w.payload
           case _                  => message.payload
         }
         val tags: Map[String, String] = eventTagger.tags(message.payload)
